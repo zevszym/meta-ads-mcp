@@ -529,11 +529,12 @@ async def create_ad(
     status: str = "PAUSED",
     bid_amount: Optional[int] = None,
     tracking_specs: Optional[List[Dict[str, Any]]] = None,
+    url_tags: Optional[str] = None,
     access_token: Optional[str] = None
 ) -> str:
     """
     Create a new ad with an existing creative.
-    
+
     Args:
         account_id: Meta Ads account ID (format: act_XXXXXXXXX)
         name: Ad name
@@ -543,6 +544,9 @@ async def create_ad(
         bid_amount: Optional bid amount in account currency (in cents)
         tracking_specs: Optional tracking specifications (e.g., for pixel events).
                       Example: [{"action.type":"offsite_conversion","fb_pixel":["YOUR_PIXEL_ID"]}]
+        url_tags: URL tags (UTM parameters) appended to ad destination URLs.
+                  Example: "utm_source=facebook&utm_medium=paid_social&utm_campaign=my_campaign"
+                  Supports Meta template variables like {{campaign.name}}, {{adset.name}}, {{ad.name}}.
         access_token: Meta API access token (optional - will use cached token if not provided)
 
     Note:
@@ -578,7 +582,9 @@ async def create_ad(
     # Add tracking specs if provided
     if tracking_specs is not None:
         params["tracking_specs"] = json.dumps(tracking_specs) # Needs to be JSON encoded string
-    
+    if url_tags is not None:
+        params["url_tags"] = url_tags
+
     try:
         data = await make_api_request(endpoint, access_token, params, method="POST")
         return json.dumps(data, indent=2)
@@ -1114,6 +1120,7 @@ async def update_ad(
     bid_amount: Optional[int] = None,
     tracking_specs: Optional[List[Dict[str, Any]]] = None,
     creative_id: Optional[Union[str, int]] = None,
+    url_tags: Optional[str] = None,
     access_token: Optional[str] = None
 ) -> str:
     """
@@ -1126,6 +1133,9 @@ async def update_ad(
         bid_amount: Bid amount in account currency (in cents for USD)
         tracking_specs: Optional tracking specifications (e.g., for pixel events).
         creative_id: ID of the creative to associate with this ad (changes the ad's image/content)
+        url_tags: URL tags (UTM parameters) appended to ad destination URLs.
+                  Example: "utm_source=facebook&utm_medium=paid_social&utm_campaign=my_campaign"
+                  Supports Meta template variables like {{campaign.name}}, {{adset.name}}, {{ad.name}}.
         access_token: Meta API access token (optional - will use cached token if not provided)
     """
     if not ad_id:
@@ -1148,9 +1158,11 @@ async def update_ad(
     if creative_id is not None:
         # Creative parameter needs to be a JSON object containing creative_id
         params["creative"] = json.dumps({"creative_id": creative_id})
+    if url_tags is not None:
+        params["url_tags"] = url_tags
 
     if not params:
-        return json.dumps({"error": "No update parameters provided (name, status, bid_amount, tracking_specs, or creative_id)"}, indent=2)
+        return json.dumps({"error": "No update parameters provided (name, status, bid_amount, tracking_specs, creative_id, or url_tags)"}, indent=2)
 
     endpoint = f"{ad_id}"
     try:

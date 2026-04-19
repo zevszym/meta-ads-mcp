@@ -129,7 +129,8 @@ async def create_campaign(
     spend_cap: Optional[int] = None,
     campaign_budget_optimization: Optional[bool] = None,
     ab_test_control_setups: Optional[List[Dict[str, Any]]] = None,
-    use_adset_level_budgets: bool = False
+    use_adset_level_budgets: bool = False,
+    promoted_object: Optional[Dict[str, Any]] = None
 ) -> str:
     """
     Create a new campaign in a Meta Ads account.
@@ -158,6 +159,10 @@ async def create_campaign(
         campaign_budget_optimization: Whether to enable campaign budget optimization (only used if use_adset_level_budgets=False)
         ab_test_control_setups: Settings for A/B testing (e.g., [{"name":"Creative A", "ad_format":"SINGLE_IMAGE"}])
         use_adset_level_budgets: If True, budgets will be set at the ad set level instead of campaign level (default: False)
+        promoted_object: Promoted object for the campaign. Required for catalog/DPA campaigns.
+                        For product catalog sales: {"product_catalog_id": "123456"}
+                        For pixel conversions: {"pixel_id": "123", "custom_event_type": "PURCHASE"}
+                        For app promotions: {"application_id": "123", "object_store_url": "https://..."}
     """
     # Check required parameters
     if not account_id:
@@ -232,7 +237,10 @@ async def create_campaign(
     
     if ab_test_control_setups:
         params["ab_test_control_setups"] = json.dumps(ab_test_control_setups)
-    
+
+    if promoted_object is not None:
+        params["promoted_object"] = json.dumps(promoted_object)
+
     try:
         data = await make_api_request(endpoint, access_token, params, method="POST")
         
@@ -268,8 +276,10 @@ async def update_campaign(
     bid_cap: Optional[int] = None,
     spend_cap: Optional[int] = None,
     campaign_budget_optimization: Optional[bool] = None,
-    objective: Optional[str] = None,  # Add objective if it's updatable
-    use_adset_level_budgets: Optional[bool] = None,  # Add other updatable fields as needed based on API docs
+    objective: Optional[str] = None,
+    use_adset_level_budgets: Optional[bool] = None,
+    promoted_object: Optional[Dict[str, Any]] = None,
+    existing_customer_budget_percentage: Optional[int] = None
 ) -> str:
     """
     Update an existing campaign in a Meta Ads account.
@@ -282,7 +292,7 @@ async def update_campaign(
         name: New campaign name
         status: New campaign status (e.g., 'ACTIVE', 'PAUSED')
         special_ad_categories: List of special ad categories if applicable
-        daily_budget: New daily budget in account currency (in cents) as a string. 
+        daily_budget: New daily budget in account currency (in cents) as a string.
                      Set to empty string "" to remove the daily budget.
         lifetime_budget: New lifetime budget in account currency (in cents) as a string.
                         Set to empty string "" to remove the lifetime budget.
@@ -292,6 +302,11 @@ async def update_campaign(
         campaign_budget_optimization: Enable/disable campaign budget optimization
         objective: New campaign objective (Note: May not always be updatable)
         use_adset_level_budgets: If True, removes campaign-level budgets to switch to ad set level budgets
+        promoted_object: Promoted object for the campaign. Use to add/change catalog or pixel association.
+                        For product catalog sales: {"product_catalog_id": "123456"}
+                        For pixel conversions: {"pixel_id": "123", "custom_event_type": "PURCHASE"}
+        existing_customer_budget_percentage: For Advantage+ Shopping Campaigns (ASC): max percentage
+                        of budget that can go to existing customers (0-100). E.g., 30 means max 30%.
     """
     if not campaign_id:
         return json.dumps({"error": "No campaign ID provided"}, indent=2)
@@ -356,7 +371,11 @@ async def update_campaign(
     if spend_cap is not None:
         params["spend_cap"] = str(spend_cap)
     if objective is not None:
-        params["objective"] = objective # Caution: Objective changes might reset learning or be restricted
+        params["objective"] = objective
+    if promoted_object is not None:
+        params["promoted_object"] = json.dumps(promoted_object)
+    if existing_customer_budget_percentage is not None:
+        params["existing_customer_budget_percentage"] = str(existing_customer_budget_percentage)
 
     if not params:
         return json.dumps({"error": "No update parameters provided"}, indent=2)

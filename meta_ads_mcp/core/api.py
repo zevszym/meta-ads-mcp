@@ -194,7 +194,21 @@ async def make_api_request(
                         body_params[key] = value
                 response = await client.put(url, params=query_params, data=body_params, headers=headers, timeout=30.0)
             elif method == "DELETE":
-                response = await client.delete(url, params=request_params, headers=headers, timeout=30.0)
+                body_keys = {"payload", "session"}
+                has_body = any(k in request_params for k in body_keys)
+                if has_body:
+                    query_params = {}
+                    body_params = {}
+                    for key, value in request_params.items():
+                        if key in ("access_token", "appsecret_proof"):
+                            query_params[key] = value
+                        elif isinstance(value, (list, dict)):
+                            body_params[key] = json.dumps(value)
+                        else:
+                            body_params[key] = value
+                    response = await client.request("DELETE", url, params=query_params, data=body_params, headers=headers, timeout=30.0)
+                else:
+                    response = await client.delete(url, params=request_params, headers=headers, timeout=30.0)
             else:
                 raise ValueError(f"Unsupported HTTP method: {method}")
             
