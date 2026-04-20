@@ -2481,7 +2481,8 @@ async def update_ad_creative(
     call_to_action_type: Optional[str] = None,
     lead_gen_form_id: Optional[Union[str, int]] = None,
     ad_formats: Optional[List[str]] = None,
-    creative_features_spec: Optional[Dict[str, Any]] = None
+    creative_features_spec: Optional[Dict[str, Any]] = None,
+    url_tags: Optional[str] = None
 ) -> str:
     """
     Update an existing ad creative's name or optimization settings.
@@ -2511,6 +2512,8 @@ async def update_ad_creative(
         creative_features_spec: Dict of Advantage+ Creative feature opt-ins/opt-outs.
                    Each key is a feature name, value is {"enroll_status": "OPT_IN"|"OPT_OUT"}.
                    Sent as a top-level field (not inside degrees_of_freedom_spec).
+        url_tags: URL tags appended to all ad links (e.g., "utm_source=meta&utm_medium=paid").
+                  Supports dynamic parameters: {{campaign.name}}, {{adset.name}}, {{ad.name}}, etc.
 
     Returns:
         JSON response with updated creative details
@@ -2642,6 +2645,9 @@ async def update_ad_creative(
     # as a top-level field (NOT inside degrees_of_freedom_spec, which is immutable).
     if creative_features_spec:
         update_data["creative_features_spec"] = creative_features_spec
+
+    if url_tags is not None:
+        update_data["url_tags"] = url_tags
 
     # Prepare the API endpoint for updating the creative
     endpoint = f"{creative_id}"
