@@ -12,11 +12,17 @@ from .auth import login
 from . import ads_library  # Import module to register conditional tools
 from .budget_schedules import create_budget_schedule
 from .targeting import search_interests, get_interest_suggestions, estimate_audience_size, search_behaviors, search_demographics, search_geo_locations
-from .custom_audiences import get_custom_audiences, get_audience_details, create_custom_audience, add_users_to_audience, remove_users_from_audience, replace_users_in_audience, delete_custom_audience, create_lookalike_audience, create_website_audience, get_audience_share_status
+from .custom_audiences import get_custom_audiences, get_audience_details, create_custom_audience, add_users_to_audience, remove_users_from_audience, replace_users_in_audience, delete_custom_audience, create_lookalike_audience, create_website_audience, create_engagement_audience, get_audience_share_status
 from . import reports  # Import module to register conditional tools
 from . import duplication  # Import module to register conditional duplication tools
 from .recommendations import get_recommendations
 from .openai_deep_research import search, fetch  # OpenAI MCP Deep Research tools
+from .craftbe_tools import (  # CRAFTBE-specific tools
+    get_ad_previews, get_placement_breakdown, get_age_gender_breakdown,
+    get_hourly_breakdown, get_delivery_estimate, get_ad_account_activities,
+    manage_ad_scheduling, get_pixel_stats, manage_custom_conversions,
+    get_reach_frequency_prediction,
+)
 
 __all__ = [
     'mcp_server',
@@ -55,8 +61,20 @@ __all__ = [
     'delete_custom_audience',
     'create_lookalike_audience',
     'create_website_audience',
+    'create_engagement_audience',
     'get_audience_share_status',
     'get_recommendations',
     'search',  # OpenAI MCP Deep Research search tool
     'fetch',   # OpenAI MCP Deep Research fetch tool
+    # CRAFTBE-specific tools
+    'get_ad_previews',
+    'get_placement_breakdown',
+    'get_age_gender_breakdown',
+    'get_hourly_breakdown',
+    'get_delivery_estimate',
+    'get_ad_account_activities',
+    'manage_ad_scheduling',
+    'get_pixel_stats',
+    'manage_custom_conversions',
+    'get_reach_frequency_prediction',
 ] 

@@ -155,7 +155,157 @@ async def get_insights(object_id: str = "", access_token: Optional[str] = None,
     return json.dumps(data, indent=2)
 
 
+@mcp_server.tool()
+@meta_api_tool
+async def meta_daily_snapshot(
+    account_id: str = "",
+    days: int = 3,
+    compact: bool = True,
+    access_token: Optional[str] = None,
+) -> str:
+    """
+    Get a comprehensive daily ads snapshot in one call: account-level daily spend,
+    per-campaign breakdown, campaign statuses, and budgets. Designed for daily
+    audits — replaces multiple get_campaigns + get_insights calls.
 
+    Args:
+        account_id: Meta Ads account ID (format: act_XXXXXXXXX). If omitted, auto-resolves to the first account accessible by the current token.
+        days: Number of days to look back (default: 3, max: 90)
+        compact: Strip zero-spend rows and redundant action types (default: True)
+        access_token: Meta API access token (optional)
+    """
+    from .api import ensure_act_prefix
 
+    if not account_id:
+        # Auto-resolve: fetch the first ad account accessible by the current token
+        accts = await make_api_request(
+            "me/adaccounts", access_token, {"fields": "id", "limit": 1}
+        )
+        accts_list = accts.get("data", []) if isinstance(accts, dict) else []
+        if accts_list:
+            account_id = accts_list[0]["id"]
+        else:
+            return json.dumps(
+                {"error": "No account_id provided and could not auto-resolve one from the current token"},
+                indent=2,
+            )
+
+    account_id = ensure_act_prefix(account_id)
+    days = max(1, min(days, 90))
+
+    today = datetime.date.today()
+    since = (today - datetime.timedelta(days=days)).strftime("%Y-%m-%d")
+    until = today.strftime("%Y-%m-%d")
+    time_range_json = json.dumps({"since": since, "until": until})
+
+    insight_fields = (
+        "account_id,impressions,clicks,spend,cpc,cpm,ctr,reach,frequency,"
+        "actions,action_values"
+    )
+
+    # --- 1. Campaigns list ---
+    campaigns_data = await make_api_request(
+        f"{account_id}/campaigns",
+        access_token,
+        {
+            "fields": "id,name,status,daily_budget,lifetime_budget,bid_strategy,start_time",
+            "limit": 100,
+        },
+    )
+
+    # --- 2. Account insights by day ---
+    account_insights_data = await make_api_request(
+        f"{account_id}/insights",
+        access_token,
+        {
+            "fields": insight_fields,
+            "time_range": time_range_json,
+            "time_increment": "1",
+            "limit": 500,
+        },
+    )
+
+    # --- 3. Campaign insights by day ---
+    campaign_insight_fields = f"campaign_id,campaign_name,{insight_fields}"
+    campaign_insights_data = await make_api_request(
+        f"{account_id}/insights",
+        access_token,
+        {
+            "fields": campaign_insight_fields,
+            "time_range": time_range_json,
+            "time_increment": "1",
+            "level": "campaign",
+            "limit": 500,
+        },
+    )
+
+    # ---- Extract data lists ----
+    campaigns_list = campaigns_data.get("data", []) if isinstance(campaigns_data, dict) else []
+    account_daily = account_insights_data.get("data", []) if isinstance(account_insights_data, dict) else []
+    campaign_daily = campaign_insights_data.get("data", []) if isinstance(campaign_insights_data, dict) else []
+
+    # ---- Compact mode processing ----
+    if compact:
+        # Strip redundant action types
+        for row in account_daily:
+            if isinstance(row, dict):
+                _strip_redundant_actions(row)
+        for row in campaign_daily:
+            if isinstance(row, dict):
+                _strip_redundant_actions(row)
+
+        # Remove zero-spend rows
+        account_daily = [
+            r for r in account_daily
+            if isinstance(r, dict) and float(r.get("spend", "0") or "0") > 0
+        ]
+        campaign_daily = [
+            r for r in campaign_daily
+            if isinstance(r, dict) and float(r.get("spend", "0") or "0") > 0
+        ]
+
+        # Keep only ACTIVE campaigns in campaign_daily
+        active_ids = {
+            c["id"] for c in campaigns_list
+            if isinstance(c, dict) and c.get("status") == "ACTIVE"
+        }
+        if active_ids:
+            campaign_daily = [
+                r for r in campaign_daily
+                if r.get("campaign_id") in active_ids
+            ]
+
+    # ---- Build summary ----
+    total_spend = sum(float(r.get("spend", "0") or "0") for r in account_daily)
+
+    total_purchases = 0
+    total_purchase_value = 0.0
+    for row in account_daily:
+        for action in row.get("actions", []) or []:
+            if action.get("action_type") == "purchase":
+                total_purchases += int(float(action.get("value", "0")))
+        for av in row.get("action_values", []) or []:
+            if av.get("action_type") == "purchase":
+                total_purchase_value += float(av.get("value", "0"))
+
+    active_count = sum(1 for c in campaigns_list if c.get("status") == "ACTIVE")
+    paused_count = sum(1 for c in campaigns_list if c.get("status") == "PAUSED")
+
+    result = {
+        "period": {"since": since, "until": until},
+        "account_daily": account_daily,
+        "campaigns": campaigns_list,
+        "campaign_daily": campaign_daily,
+        "summary": {
+            "total_spend": round(total_spend, 2),
+            "total_purchases": total_purchases,
+            "total_purchase_value": round(total_purchase_value, 2),
+            "roas": round(total_purchase_value / total_spend, 2) if total_spend > 0 else 0,
+            "active_campaigns": active_count,
+            "paused_campaigns": paused_count,
+        },
+    }
+
+    return json.dumps(result, indent=2)
 
  

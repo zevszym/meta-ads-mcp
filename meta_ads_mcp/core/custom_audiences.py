@@ -398,13 +398,13 @@ async def create_lookalike_audience(
         "type": "custom_ratio",
         "ratio": ratio,
         "country": country,
-        "origin": [{"id": source_audience_id, "type": "custom_audience"}],
     }
 
     params = {
         "name": name,
         "subtype": "LOOKALIKE",
-        "lookalike_spec": lookalike_spec,
+        "origin_audience_id": source_audience_id,
+        "lookalike_spec": json.dumps(lookalike_spec),
     }
     data = await make_api_request(endpoint, access_token, params, method="POST")
     return json.dumps(data, indent=2)
@@ -482,6 +482,74 @@ async def create_website_audience(
     params: Dict[str, Any] = {
         "name": name,
         "rule": json.dumps(rule),
+        "prefill": 1 if prefill else 0,
+    }
+    if description:
+        params["description"] = description
+
+    data = await make_api_request(endpoint, access_token, params, method="POST")
+    return json.dumps(data, indent=2)
+
+
+@mcp_server.tool()
+@meta_api_tool
+async def create_engagement_audience(
+    account_id: str,
+    name: str,
+    source_type: str,
+    source_id: str,
+    event_name: str,
+    retention_days: int = 180,
+    video_watched_pct: int = 0,
+    prefill: bool = True,
+    description: str = "",
+    access_token: Optional[str] = None,
+) -> str:
+    """
+    Create an Engagement Custom Audience (FB Page, Instagram, or Video viewers).
+
+    IMPORTANT: Do NOT pass subtype=ENGAGEMENT — the API infers it from the rule.
+
+    Args:
+        account_id: Ad account ID (e.g., 'act_523933962063921')
+        name: Audience name (e.g., 'ENG — Instagram Engaged (180d)')
+        source_type: Event source type. One of: 'page' (FB Page), 'ig_business' (Instagram Business)
+        source_id: ID of the source (FB Page ID or IG Business Profile ID)
+        event_name: Engagement event. For page: 'page_engaged', 'page_visited', 'page_messaged', 'page_cta_clicked', 'page_saved'. For ig_business: 'ig_business_profile_all', 'ig_business_profile_engaged', 'ig_user_messaged_business', 'ig_business_profile_visit'. For video: 'video_watched'
+        retention_days: How many days to retain users (1-180, default 180)
+        video_watched_pct: For video_watched events: minimum percentage watched (25, 50, 75, 95). Set 0 to skip.
+        prefill: Backfill with existing data (default True)
+        description: Optional description
+        access_token: Meta API access token (optional)
+
+    Returns:
+        JSON string with the created audience ID
+    """
+    account_id = ensure_act_prefix(account_id)
+    retention_seconds = min(retention_days, 180) * 86400
+
+    filters = [{"field": "event", "operator": "=", "value": event_name}]
+    if video_watched_pct > 0:
+        filters.append({"field": "video_watched_pct", "operator": ">=", "value": str(video_watched_pct)})
+
+    rule: Dict[str, Any] = {
+        "inclusions": {
+            "operator": "or",
+            "rules": [
+                {
+                    "event_sources": [{"id": source_id, "type": source_type}],
+                    "retention_seconds": retention_seconds,
+                    "filter": {"operator": "and", "filters": filters},
+                }
+            ],
+        }
+    }
+
+    endpoint = f"{account_id}/customaudiences"
+    params: Dict[str, Any] = {
+        "name": name,
+        "rule": json.dumps(rule),
+        "retention_days": retention_days,
         "prefill": 1 if prefill else 0,
     }
     if description:

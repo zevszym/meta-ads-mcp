@@ -397,4 +397,75 @@ async def update_campaign(
             "error": f"Failed to update campaign {campaign_id}",
             "details": error_msg,
             "params_sent": params # Be careful about logging sensitive data if any
-        }, indent=2) 
+        }, indent=2)
+
+
+@mcp_server.tool()
+@meta_api_tool
+async def meta_bulk_update_budgets(
+    updates: str = "[]",
+    account_id: str = "",
+    access_token: Optional[str] = None,
+) -> str:
+    """
+    Update daily budgets for multiple campaigns in one call. More efficient than
+    calling update_campaign multiple times.
+
+    Args:
+        updates: JSON array of objects with campaign_id and daily_budget (in grosz/cents).
+                 Example: [{"campaign_id": "123", "daily_budget": 9000}] sets 90 PLN/day.
+        account_id: Meta Ads account ID (optional, for validation)
+        access_token: Meta API access token (optional)
+    """
+    try:
+        update_list = json.loads(updates) if isinstance(updates, str) else updates
+    except (json.JSONDecodeError, TypeError) as e:
+        return json.dumps({"error": f"Invalid JSON in updates: {e}"}, indent=2)
+
+    if not isinstance(update_list, list) or len(update_list) == 0:
+        return json.dumps({"error": "updates must be a non-empty JSON array of {campaign_id, daily_budget} objects"}, indent=2)
+
+    results = []
+    errors = []
+
+    for item in update_list:
+        campaign_id = item.get("campaign_id")
+        daily_budget = item.get("daily_budget")
+
+        if not campaign_id or daily_budget is None:
+            errors.append({
+                "campaign_id": campaign_id,
+                "error": "Missing campaign_id or daily_budget",
+            })
+            continue
+
+        try:
+            data = await make_api_request(
+                f"{campaign_id}",
+                access_token,
+                {"daily_budget": str(daily_budget)},
+                method="POST",
+            )
+            if isinstance(data, dict) and "error" in data:
+                errors.append({
+                    "campaign_id": campaign_id,
+                    "error": data["error"],
+                })
+            else:
+                results.append({
+                    "campaign_id": campaign_id,
+                    "daily_budget": daily_budget,
+                    "success": True,
+                    "response": data,
+                })
+        except Exception as e:
+            errors.append({
+                "campaign_id": campaign_id,
+                "error": str(e),
+            })
+
+    return json.dumps({
+        "updated": len(results),
+        "results": results,
+        "errors": errors,
+    }, indent=2)
