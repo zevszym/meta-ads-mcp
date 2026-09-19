@@ -23,6 +23,10 @@ from .craftbe_tools import (  # CRAFTBE-specific tools
     manage_ad_scheduling, get_pixel_stats, manage_custom_conversions,
     get_reach_frequency_prediction,
 )
+from .page_tools import (  # Page posts and comments (FB + IG), throttled writes
+    get_page_posts, get_instagram_media, get_post_comments,
+    update_page_post, reply_to_comment, set_comment_hidden,
+)
 
 __all__ = [
     'mcp_server',
